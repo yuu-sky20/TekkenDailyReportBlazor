@@ -1,0 +1,233 @@
+﻿@page "/"
+@using TekkenDailyReport.Models;
+@using TekkenDailyReport.Datas;
+@using TekkenDailyReport.DTOs;
+@using System.Text;
+@using Newtonsoft.Json;
+@inject HttpClient Http
+@inject NotificationService NotificationService
+
+<div class="d-flex gap-3 flex-column">
+    <div>
+        <RadzenDataGrid @ref="grid"
+            AllowColumnPicking="false" AllowFiltering="false"
+            AllowPaging="true" AllowSorting="false"
+            EditMode="DataGridEditMode.Single"
+            AllowRowSelectOnRowClick="true"
+            SelectionMode="DataGridSelectionMode.Multiple"
+            @bind-Value=@selectedDailyReports
+            Data="@dailyReports" TItem="ModelDailyReport">
+            
+            <Columns>
+                @*
+                <RadzenDataGridColumn TItem="ModelDailyReport" width="60px">
+                    <HeaderTemplate>
+                        <RadzenCheckBox TriState="false" TValue="bool" Value="@(dailyReports.Any(i => selectedDailyReports != null && selectedDailyReports.Contains(i)))"
+                                        Change="@(args => selectedDailyReports = args ? dailyReports.ToList() : null)" />
+                    </HeaderTemplate>
+                    <Template Context="model">
+                        <RadzenCheckBox TriState="false" Value="@(selectedDailyReports != null && selectedDailyReports.Contains(model))" 
+                            TValue="bool" Change=@(args => { if(!allowRowSelectOnRowClick) { grid.SelectRow(model); }}) />
+                    </Template>
+                </RadzenDataGridColumn>
+                *@
+                <RadzenDataGridColumn TItem="ModelDailyReport" Property="Time" Title="時間" Width="80px" >
+                    <Template Context="model">
+                        <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.ExtraSmall" Text="@model.Time" Click="@(args => EditRow(model))" @onclick:stopPropagation="true"></RadzenButton>
+                    </Template>
+                    <EditTemplate Context="model">
+                        <RadzenButton Icon="check" ButtonStyle="ButtonStyle.Success" Variant="Variant.Flat" Size="ButtonSize.ExtraSmall" Text="@model.Time" Click="@((args) => SaveRow(model))"></RadzenButton>
+                    </EditTemplate>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="ModelDailyReport" Property="Number" Title="工事No." Width="110px" TextAlign="TextAlign.Center">
+                    <Template Context="model">
+                        <RadzenLabel Text="@model.Number.ToString()" />
+                    </Template>
+                    <EditTemplate Context="model">
+                        <RadzenNumeric @bind-Value="model.Number" Style="width:100%;" Name="工事No." ShowUpDown="false" Min="0" Max="10000" />
+                    </EditTemplate>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="ModelDailyReport" Property="Context" Title="作業内容">
+                    <Template Context="model">
+                        <RadzenLabel Text="@model.Context" />
+                    </Template>
+                    <EditTemplate Context="model">
+                        <RadzenDropDown
+                            AllowClear="true" AllowVirtualization="true"
+                            AllowFiltering="true"
+                            Style="width: 100%;"
+                            @bind-Value=@model.Context Data=@dailyReportContexts
+                            >
+                        </RadzenDropDown>
+                    </EditTemplate>
+                </RadzenDataGridColumn>
+
+                @*
+                <RadzenDataGridColumn TItem="ModelDailyReport" TextAlign="TextAlign.Right">
+                    <Template Context="model">
+                        <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@(args => EditRow(model))" @onclick:stopPropagation="true">
+                        </RadzenButton>
+                    </Template>
+                    <EditTemplate Context="model">
+                        <RadzenButton Icon="check" ButtonStyle="ButtonStyle.Success" Variant="Variant.Flat" Size="ButtonSize.Medium" Click="@((args) => SaveRow(model))">
+                        </RadzenButton>
+                        /*
+                        <RadzenButton Icon="close" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" class="my-1 ms-1" Click="@((args) => CancelEdit(model))">
+                        </RadzenButton>
+                        */
+                    </EditTemplate>
+                </RadzenDataGridColumn>
+                *@
+            </Columns>
+        </RadzenDataGrid>
+    </div>
+
+    <div>
+        <RadzenTemplateForm TItem="ModelEmployeeDailyReport" Data=@employeeDailyReport Submit=@SendEmployeeDailyReport InvalidSubmit=@OnInvalidSubmit Style="">
+            <RadzenFieldset>
+                <div class="row my-3 py-1 d-flex justify-content-center">
+                    <div class="text-center">
+                        <RadzenLabel Text="名前（フルネーム）" />
+                    </div>
+                    <div class="row d-flex justify-content-center">
+                        <div class="row" style="width: 250px;">
+                            <RadzenTextBox @bind-Value="@employeeDailyReport.EmployeeName" Name="EmployeeName" Style="display: block;"/>
+                        </div>
+                        <div class="d-flex justify-content-center">
+                            <RadzenRequiredValidator Component="EmployeeName" Text="名前入力は必須です。" Popup="true" />
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-4 mb-3 py-1 d-flex justify-content-center">
+                    <div class="row text-center">
+                        <RadzenLabel Text="備考" />
+                    </div>
+                    <div class="row w-75">
+                        <RadzenTextArea @bind-Value="@employeeDailyReport.Comment" Style="display: block" Name="Comment" />
+                    </div>
+                </div>
+                <div class="row d-flex justify-content-center">
+                    <div class=" w-50">
+                        <RadzenButton 
+                            Style="margin: 0 auto; display: block;"
+                            Text="日報を送信" Icon="done" 
+                            ButtonType="ButtonType.Submit" Disabled="@IsDisableSendButton()"/>
+                    </div>
+                </div>
+            </RadzenFieldset>
+        </RadzenTemplateForm>
+
+
+
+        @*
+        <div class="col">
+            <RadzenTextArea @bind-Value="@text" Style="width: 100%;" ReadOnly="true" />
+        </div>
+        *@
+    </div>
+</div>
+
+@*
+<style>
+    div.rz-dropdown-panel.rz-popup{
+        left: 0px !important;
+    }
+</style>
+
+*@
+
+@code {
+    RadzenDataGrid<ModelDailyReport> grid;
+    IEnumerable<ModelDailyReport> dailyReports;
+    IEnumerable<string> dailyReportContexts;
+    DataDailyReportContexts dataDailyReportContexts = new DataDailyReportContexts();
+    DtoDailyReport dataDailyReportTemplate = new DtoDailyReport();
+
+    bool allowRowSelectOnRowClick = true;
+    IList<ModelDailyReport> selectedDailyReports;
+
+    ModelDailyReport modelToUpdate;
+
+    void Reset()
+    {
+        modelToUpdate = null;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+        dailyReports = dataDailyReportTemplate.GetDailyReports();
+        dailyReportContexts = dataDailyReportContexts.GetContext();
+    }
+
+    async Task EditRow(ModelDailyReport model)
+    {
+        modelToUpdate = model;
+        await grid.EditRow(model);
+    }
+
+    void OnUpdateRow(ModelDailyReport model)
+    {
+        modelToUpdate = null;
+        dataDailyReportTemplate.ReplaceDailyReport(model);
+    }
+
+    async Task SaveRow(ModelDailyReport model)
+    {
+        await grid.UpdateRow(model);
+    }
+
+    void CancelEdit(ModelDailyReport model)
+    {
+        modelToUpdate = null;
+        grid.CancelEditRow(model);
+    }
+
+    ModelEmployeeDailyReport employeeDailyReport = new ModelEmployeeDailyReport();
+
+    string text;
+    bool isSendOk = true;
+
+    bool IsDisableSendButton()
+    {
+        return !isSendOk || selectedDailyReports == null || employeeDailyReport.EmployeeName == null || selectedDailyReports.Count <= 0 || employeeDailyReport.EmployeeName.Length <= 0;
+    }
+
+    private async Task SendEmployeeDailyReport()
+    {
+        if (IsDisableSendButton()) return;
+        isSendOk = false;
+        employeeDailyReport.DailyReport = selectedDailyReports.ToArray();
+        employeeDailyReport.CreatedAt = DateTime.Now;
+
+        string json = JsonConvert.SerializeObject(employeeDailyReport);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        try
+        {
+            var response = await Http.PostAsync("https://zdkjpywzzj.execute-api.ap-northeast-1.amazonaws.com/daily-report/", content);
+            var resString = await response.Content.ReadAsStringAsync();
+
+            text = resString;
+            ShowNotification(new NotificationMessage { Severity = NotificationSeverity.Success, Summary = "日報送信完了", Detail = "本日の日報を送信しました。お疲れさまでした。", Duration = 6000 });
+            isSendOk = true;
+        }
+        catch (Exception ex)
+        {
+            text = ex.Message;
+            ShowNotification(new NotificationMessage { Severity = NotificationSeverity.Error, Summary = "日報送信失敗", Detail = "日報の送信に失敗しました。" + ex.Message });
+            isSendOk = true;
+        }
+    }
+
+    private void OnInvalidSubmit(FormInvalidSubmitEventArgs args)
+    {
+        text = "error occurrrsed.";
+    }
+
+    void ShowNotification(NotificationMessage message)
+    {
+        NotificationService.Notify(message);
+    }
+}
